@@ -41,13 +41,13 @@ Before getting started with ShakyOS, ensure you have the following installed:
 > Edit .env and add your values:
 
 ## Suggested quick-start environment variables
-DISCORD_APPLICATION_ID=  # For Discord integration
-DISCORD_API_TOKEN=       # Bot token
-HEURIST_API_KEY=         # Heurist API key for LLM and image generation
-OPENAI_API_KEY=          # OpenAI API key
-GROK_API_KEY=            # Grok API key
-ELEVENLABS_XI_API_KEY=   # API key from ElevenLabs (for voice)
-LIVEPEER_GATEWAY_URL=    # Livepeer gateway URL
+> DISCORD_APPLICATION_ID=  # For Discord integration
+> DISCORD_API_TOKEN=       # Bot token
+> HEURIST_API_KEY=         # Heurist API key for LLM and image generation
+> OPENAI_API_KEY=          # OpenAI API key
+> GROK_API_KEY=            # Grok API key
+> ELEVENLABS_XI_API_KEY=   # API key from ElevenLabs (for voice)
+> LIVEPEER_GATEWAY_URL=    # Livepeer gateway URL
 
 ## Create Your First Agent
 
