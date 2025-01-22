@@ -1,0 +1,39 @@
+{
+    "$schema": "https://turbo.build/schema.json",
+    "tasks": {
+        "check-types": {
+            "dependsOn": ["build"]
+        },
+        "@elizaos/agent#check-types": {
+            "dependsOn": [
+                "@elizaos/plugin-direct#build"
+            ]
+        },
+        "build": {
+            "outputs": ["dist/**"],
+            "dependsOn": ["^@elizaos/core#build"]
+        },
+        "@elizaos/client-direct#build": {
+            "outputs": ["dist/**"],
+            "dependsOn": [
+                "@elizaos/plugin-image-generation#build",
+                "@elizaos/plugin-tee#build"
+            ]
+        },
+        "@elizaos/plugin-evm#build": {
+            "outputs": ["dist/**"],
+            "dependsOn": ["@elizaos/plugin-tee#build"]
+        },
+        "@elizaos/plugin-tee-log#build": {
+            "outputs": ["dist/**"],
+            "dependsOn": [
+                "@elizaos/plugin-tee#build",
+                "@elizaos/plugin-sgx#build"
+            ]
+        },
+        "dev": {
+            "persistent": true,
+            "cache": false
+        }
+    }
+}

@@ -1,0 +1,32 @@
+def REACT_NATIVE_VERSION = new File(['node', '--print',"JSON.parse(require('fs').readFileSync(require.resolve('react-native/package.json'), 'utf-8')).version"].execute(null, rootDir).text.trim())
+
+buildscript {
+    ext {
+        buildToolsVersion = "35.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 35
+        targetSdkVersion = 34
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.0.21"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+allprojects {
+    configurations.all {
+          resolutionStrategy {
+            force "com.facebook.react:react-native:" + REACT_NATIVE_VERSION
+          }
+    }
+    // ...
+}
+
+apply plugin: "com.facebook.react.rootproject"
