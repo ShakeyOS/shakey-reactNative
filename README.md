@@ -4,6 +4,15 @@
 
 Shakey OS is the first open source Mobile AI Framework for React Native allowing people to build apps for IOS and Android with AI tooling and wallet integrated out of the box.
 
+## How it works ( this demo example app is provided in the code ) 
+
+
+
+
+https://github.com/user-attachments/assets/9adb1b8f-54bb-462a-8616-a4f06152b395
+
+
+
 
 ## ShakeyOS Guide
 ### Prerequisites 
