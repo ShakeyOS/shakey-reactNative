@@ -1,22 +1,24 @@
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import  fs from "fs";
-import  path  from "path";
+import path from "path";
+import fs from "fs";
+
 import {
-    AgentRuntime,
+    type AgentRuntime,
     elizaLogger,
     getEnvVariable,
-    UUID,
+    type UUID,
     validateCharacterConfig,
     ServiceType,
+    type Character,
 } from "@elizaos/core";
 
-import { TeeLogQuery, TeeLogService } from "@elizaos/plugin-tee-log";
+import type { TeeLogQuery, TeeLogService } from "@elizaos/plugin-tee-log";
 import { REST, Routes } from "discord.js";
-import { DirectClient } from ".";
+import type { DirectClient } from ".";
 import { validateUuid } from "@elizaos/core";
-import { fileURLToPath } from "url"
+
 interface UUIDParams {
     agentId: UUID;
     roomId?: UUID;
@@ -63,24 +65,8 @@ export function createApiRouter(
         })
     );
 
-    const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
     router.get("/", (req, res) => {
         res.send("Welcome, this is the REST API!");
-    });
-    router.get("/masood", (req, res) => {
-        const filePath = path.join(__dirname, "../../../characters/hello.json");
-
-    // Create a file with content
-    fs.writeFile(filePath, "Hello, World!", (err) => {
-        if (err) {
-            console.error("Error creating the file:", err);
-            return res.status(500).json({ message: "Failed to create file" });
-        }
-        console.log("File created successfully!");
-        res.json({ message: "File created successfully!", filePath });
-    });
-        // res.send("Welcome, this is the REST API Masood!");
     });
 
     router.get("/hello", (req, res) => {
@@ -94,6 +80,17 @@ const __dirname = path.dirname(__filename);
             clients: Object.keys(agent.clients),
         }));
         res.json({ agents: agentsList });
+    });
+
+    router.get('/storage', async (req, res) => {
+        try {
+            const uploadDir = path.join(process.cwd(), "data", "characters");
+            console.log("🚀 ~ router.get ~ uploadDir:", uploadDir)
+            const files = await fs.promises.readdir(uploadDir);
+            res.json({ files });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
     });
 
     router.get("/agents/:agentId", (req, res) => {
@@ -120,6 +117,86 @@ const __dirname = path.dirname(__filename);
         });
     });
 
+    router.delete("/agents/:agentId", async (req, res) => {
+        const { agentId } = validateUUIDParams(req.params, res) ?? {
+            agentId: null,
+        };
+        if (!agentId) return;
+
+        const agent: AgentRuntime = agents.get(agentId);
+
+        if (agent) {
+            agent.stop();
+            directClient.unregisterAgent(agent);
+            res.status(204).json({ success: true });
+        } else {
+            res.status(404).json({ error: "Agent not found" });
+        }
+    });
+
+// Create a new agent
+router.post("/agents/create", async (req, res) => {
+    const characterJson = { ...req.body }; // Store the original character data
+
+    // Validate character configuration
+    try {
+        validateCharacterConfig(characterJson);
+    } catch (e) {
+        elizaLogger.error(`Error parsing character: ${e}`);
+        res.status(400).json({
+            success: false,
+            message: e.message,
+        });
+        return;
+    }
+
+    let agent;
+    try {
+        // Start and register the new agent
+        agent = await directClient.startAgent(characterJson);
+        elizaLogger.log(`Agent ${characterJson.name} started successfully.`);
+    } catch (e) {
+        elizaLogger.error(`Error starting new agent: ${e}`);
+        res.status(500).json({
+            success: false,
+            message: e.message,
+        });
+        return;
+    }
+
+    // Store the agent configuration if enabled
+    if (process.env.USE_CHARACTER_STORAGE === "true") {
+        try {
+            const filename = `${agent.agentId}.json`;
+            const uploadDir = path.join(process.cwd(), "data", "characters");
+            const filepath = path.join(uploadDir, filename);
+            await fs.promises.mkdir(uploadDir, { recursive: true });
+            await fs.promises.writeFile(
+                filepath,
+                JSON.stringify(
+                    { ...characterJson, id: agent.agentId },
+                    null,
+                    2
+                )
+            );
+            elizaLogger.info(`Agent configuration stored successfully at ${filepath}`);
+        } catch (error) {
+            elizaLogger.error(`Failed to store agent configuration: ${error.message}`);
+        }
+    }
+
+    res.status(201).json({
+        success: true,
+        message: "Agent created successfully.",
+        agent: {
+            id: agent.agentId,
+            character: characterJson,
+        },
+    });
+});
+
+
+
     router.post("/agents/:agentId/set", async (req, res) => {
         const { agentId } = validateUUIDParams(req.params, res) ?? {
             agentId: null,
@@ -136,6 +213,9 @@ const __dirname = path.dirname(__filename);
             // if it has a different name, the agentId will change
         }
 
+        // stores the json data before it is modified with added data
+        const characterJson = { ...req.body };
+
         // load character from body
         const character = req.body;
         try {
@@ -150,8 +230,45 @@ const __dirname = path.dirname(__filename);
         }
 
         // start it up (and register it)
-        agent = await directClient.startAgent(character);
-        elizaLogger.log(`${character.name} started`);
+        try {
+            agent = await directClient.startAgent(character);
+            elizaLogger.log(`${character.name} started`);
+        } catch (e) {
+            elizaLogger.error(`Error starting agent: ${e}`);
+            res.status(500).json({
+                success: false,
+                message: e.message,
+            });
+            return;
+        }
+
+        if (process.env.USE_CHARACTER_STORAGE === "true") {
+            try {
+                const filename = `${agent.agentId}.json`;
+                const uploadDir = path.join(
+                    process.cwd(),
+                    "data",
+                    "characters"
+                );
+                const filepath = path.join(uploadDir, filename);
+                await fs.promises.mkdir(uploadDir, { recursive: true });
+                await fs.promises.writeFile(
+                    filepath,
+                    JSON.stringify(
+                        { ...characterJson, id: agent.agentId },
+                        null,
+                        2
+                    )
+                );
+                elizaLogger.info(
+                    `Character stored successfully at ${filepath}`
+                );
+            } catch (error) {
+                elizaLogger.error(
+                    `Failed to store character: ${error.message}`
+                );
+            }
+        }
 
         res.json({
             id: character.id,
@@ -260,18 +377,20 @@ const __dirname = path.dirname(__filename);
 
             for (const agentRuntime of agents.values()) {
                 const teeLogService = agentRuntime
-                    .getService<TeeLogService>(
-                    ServiceType.TEE_LOG
-                )
-                .getInstance();
+                    .getService<TeeLogService>(ServiceType.TEE_LOG)
+                    .getInstance();
 
                 const agents = await teeLogService.getAllAgents();
-                allAgents.push(...agents)
+                allAgents.push(...agents);
             }
 
             const runtime: AgentRuntime = agents.values().next().value;
-            const teeLogService = runtime.getService<TeeLogService>(ServiceType.TEE_LOG).getInstance();
-            const attestation = await teeLogService.generateAttestation(JSON.stringify(allAgents));
+            const teeLogService = runtime
+                .getService<TeeLogService>(ServiceType.TEE_LOG)
+                .getInstance();
+            const attestation = await teeLogService.generateAttestation(
+                JSON.stringify(allAgents)
+            );
             res.json({ agents: allAgents, attestation: attestation });
         } catch (error) {
             elizaLogger.error("Failed to get TEE agents:", error);
@@ -291,13 +410,13 @@ const __dirname = path.dirname(__filename);
             }
 
             const teeLogService = agentRuntime
-                .getService<TeeLogService>(
-                ServiceType.TEE_LOG
-            )
-            .getInstance();
+                .getService<TeeLogService>(ServiceType.TEE_LOG)
+                .getInstance();
 
             const teeAgent = await teeLogService.getAgent(agentId);
-            const attestation = await teeLogService.generateAttestation(JSON.stringify(teeAgent));
+            const attestation = await teeLogService.generateAttestation(
+                JSON.stringify(teeAgent)
+            );
             res.json({ agent: teeAgent, attestation: attestation });
         } catch (error) {
             elizaLogger.error("Failed to get TEE agent:", error);
@@ -312,8 +431,8 @@ const __dirname = path.dirname(__filename);
         async (req: express.Request, res: express.Response) => {
             try {
                 const query = req.body.query || {};
-                const page = parseInt(req.body.page) || 1;
-                const pageSize = parseInt(req.body.pageSize) || 10;
+                const page = Number.parseInt(req.body.page) || 1;
+                const pageSize = Number.parseInt(req.body.pageSize) || 10;
 
                 const teeLogQuery: TeeLogQuery = {
                     agentId: query.agentId || "",
@@ -326,12 +445,16 @@ const __dirname = path.dirname(__filename);
                 };
                 const agentRuntime: AgentRuntime = agents.values().next().value;
                 const teeLogService = agentRuntime
-                    .getService<TeeLogService>(
-                        ServiceType.TEE_LOG
-                    )
+                    .getService<TeeLogService>(ServiceType.TEE_LOG)
                     .getInstance();
-                const pageQuery = await teeLogService.getLogs(teeLogQuery, page, pageSize);
-                const attestation = await teeLogService.generateAttestation(JSON.stringify(pageQuery));
+                const pageQuery = await teeLogService.getLogs(
+                    teeLogQuery,
+                    page,
+                    pageSize
+                );
+                const attestation = await teeLogService.generateAttestation(
+                    JSON.stringify(pageQuery)
+                );
                 res.json({
                     logs: pageQuery,
                     attestation: attestation,
@@ -344,6 +467,56 @@ const __dirname = path.dirname(__filename);
             }
         }
     );
+
+    router.post("/agent/start", async (req, res) => {
+        const { characterPath, characterJson } = req.body;
+        console.log("characterPath:", characterPath);
+        console.log("characterJson:", characterJson);
+        try {
+            let character: Character;
+            if (characterJson) {
+                character = await directClient.jsonToCharacter(
+                    characterPath,
+                    characterJson
+                );
+            } else if (characterPath) {
+                character =
+                    await directClient.loadCharacterTryPath(characterPath);
+            } else {
+                throw new Error("No character path or JSON provided");
+            }
+            await directClient.startAgent(character);
+            elizaLogger.log(`${character.name} started`);
+
+            res.json({
+                id: character.id,
+                character: character,
+            });
+        } catch (e) {
+            elizaLogger.error(`Error parsing character: ${e}`);
+            res.status(400).json({
+                error: e.message,
+            });
+            return;
+        }
+    });
+
+    router.post("/agents/:agentId/stop", async (req, res) => {
+        const agentId = req.params.agentId;
+        console.log("agentId", agentId);
+        const agent: AgentRuntime = agents.get(agentId);
+
+        // update character
+        if (agent) {
+            // stop agent
+            agent.stop();
+            directClient.unregisterAgent(agent);
+            // if it has a different name, the agentId will change
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: "Agent not found" });
+        }
+    });
 
     return router;
 }
