@@ -85,7 +85,6 @@ export function createApiRouter(
     router.get('/storage', async (req, res) => {
         try {
             const uploadDir = path.join(process.cwd(), "data", "characters");
-            console.log("🚀 ~ router.get ~ uploadDir:", uploadDir)
             const files = await fs.promises.readdir(uploadDir);
             res.json({ files });
         } catch (error) {
@@ -133,69 +132,6 @@ export function createApiRouter(
             res.status(404).json({ error: "Agent not found" });
         }
     });
-
-// Create a new agent
-router.post("/agents/create", async (req, res) => {
-    const characterJson = { ...req.body }; // Store the original character data
-
-    // Validate character configuration
-    try {
-        validateCharacterConfig(characterJson);
-    } catch (e) {
-        elizaLogger.error(`Error parsing character: ${e}`);
-        res.status(400).json({
-            success: false,
-            message: e.message,
-        });
-        return;
-    }
-
-    let agent;
-    try {
-        // Start and register the new agent
-        agent = await directClient.startAgent(characterJson);
-        elizaLogger.log(`Agent ${characterJson.name} started successfully.`);
-    } catch (e) {
-        elizaLogger.error(`Error starting new agent: ${e}`);
-        res.status(500).json({
-            success: false,
-            message: e.message,
-        });
-        return;
-    }
-
-    // Store the agent configuration if enabled
-    if (process.env.USE_CHARACTER_STORAGE === "true") {
-        try {
-            const filename = `${agent.agentId}.json`;
-            const uploadDir = path.join(process.cwd(), "data", "characters");
-            const filepath = path.join(uploadDir, filename);
-            await fs.promises.mkdir(uploadDir, { recursive: true });
-            await fs.promises.writeFile(
-                filepath,
-                JSON.stringify(
-                    { ...characterJson, id: agent.agentId },
-                    null,
-                    2
-                )
-            );
-            elizaLogger.info(`Agent configuration stored successfully at ${filepath}`);
-        } catch (error) {
-            elizaLogger.error(`Failed to store agent configuration: ${error.message}`);
-        }
-    }
-
-    res.status(201).json({
-        success: true,
-        message: "Agent created successfully.",
-        agent: {
-            id: agent.agentId,
-            character: characterJson,
-        },
-    });
-});
-
-
 
     router.post("/agents/:agentId/set", async (req, res) => {
         const { agentId } = validateUUIDParams(req.params, res) ?? {
