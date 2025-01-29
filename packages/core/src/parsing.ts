@@ -1,10 +1,13 @@
-import { ActionResponse } from "./types.ts";
+import type { ActionResponse } from "./types.ts";
 const jsonBlockPattern = /```json\n([\s\S]*?)\n```/;
 
-export const messageCompletionFooter = `\nResponse format should be formatted in a JSON block like this:
+export const messageCompletionFooter = `\nResponse format should be formatted in a valid JSON block like this:
 \`\`\`json
-{ "user": "{{agentName}}", "text": "string", "action": "string" }
-\`\`\``;
+{ "user": "{{agentName}}", "text": "<string>", "action": "<string>" }
+\`\`\`
+
+The “action” field should be one of the options in [Available Actions] and the "text" field should be the response you want to send.
+`;
 
 export const shouldRespondFooter = `The available options are [RESPOND], [IGNORE], or [STOP]. Choose the most appropriate option.
 If {{agentName}} is talking too much, you can choose [IGNORE]
@@ -24,12 +27,12 @@ export const parseShouldRespondFromText = (
     return match
         ? (match[0].toUpperCase() as "RESPOND" | "IGNORE" | "STOP")
         : text.includes("RESPOND")
-          ? "RESPOND"
-          : text.includes("IGNORE")
-            ? "IGNORE"
-            : text.includes("STOP")
-              ? "STOP"
-              : null;
+        ? "RESPOND"
+        : text.includes("IGNORE")
+        ? "IGNORE"
+        : text.includes("STOP")
+        ? "STOP"
+        : null;
 };
 
 export const booleanFooter = `Respond with only a YES or a NO.`;
@@ -60,7 +63,7 @@ export const parseBooleanFromText = (text: string) => {
     return null; // Return null for unrecognized inputs
 };
 
-export const stringArrayFooter = `Respond with a JSON array containing the values in a JSON block formatted for markdown with this structure:
+export const stringArrayFooter = `Respond with a JSON array containing the values in a valid JSON block formatted for markdown with this structure:
 \`\`\`json
 [
   'value',
@@ -68,7 +71,7 @@ export const stringArrayFooter = `Respond with a JSON array containing the value
 ]
 \`\`\`
 
-Your response must include the JSON block.`;
+Your response must include the valid JSON block.`;
 
 /**
  * Parses a JSON array from a given text. The function looks for a JSON block wrapped in triple backticks
@@ -87,26 +90,34 @@ export function parseJsonArrayFromText(text: string) {
 
     if (jsonBlockMatch) {
         try {
-            // Replace single quotes with double quotes before parsing
-            const normalizedJson = jsonBlockMatch[1].replace(/'/g, '"');
+            // Only replace quotes that are actually being used for string delimitation
+            const normalizedJson = jsonBlockMatch[1].replace(
+                /(?<!\\)'([^']*)'(?=\s*[,}\]])/g,
+                '"$1"'
+            );
             jsonData = JSON.parse(normalizedJson);
         } catch (e) {
             console.error("Error parsing JSON:", e);
+            console.error("Failed parsing text:", jsonBlockMatch[1]);
         }
     }
 
     // If that fails, try to find an array pattern
     if (!jsonData) {
-        const arrayPattern = /\[\s*['"][^'"]*['"]\s*\]/;
+        const arrayPattern = /\[\s*(['"])(.*?)\1\s*\]/;
         const arrayMatch = text.match(arrayPattern);
 
         if (arrayMatch) {
             try {
-                // Replace single quotes with double quotes before parsing
-                const normalizedJson = arrayMatch[0].replace(/'/g, '"');
+                // Only replace quotes that are actually being used for string delimitation
+                const normalizedJson = arrayMatch[0].replace(
+                    /(?<!\\)'([^']*)'(?=\s*[,}\]])/g,
+                    '"$1"'
+                );
                 jsonData = JSON.parse(normalizedJson);
             } catch (e) {
                 console.error("Error parsing JSON:", e);
+                console.error("Failed parsing text:", arrayMatch[0]);
             }
         }
     }
@@ -140,7 +151,8 @@ export function parseJSONObjectFromText(
             jsonData = JSON.parse(jsonBlockMatch[1]);
         } catch (e) {
             console.error("Error parsing JSON:", e);
-            return null;
+            console.error("Text is not JSON", text);
+            return extractAttributes(jsonBlockMatch[1]);
         }
     } else {
         const objectPattern = /{[\s\S]*?}/;
@@ -151,7 +163,8 @@ export function parseJSONObjectFromText(
                 jsonData = JSON.parse(objectMatch[0]);
             } catch (e) {
                 console.error("Error parsing JSON:", e);
-                return null;
+                console.error("Text is not JSON", text);
+                return extractAttributes(objectMatch[0]);
             }
         }
     }
@@ -167,6 +180,55 @@ export function parseJSONObjectFromText(
     } else {
         return null;
     }
+}
+
+/**
+ * Extracts specific attributes (e.g., user, text, action) from a JSON-like string using regex.
+ * @param response - The cleaned string response to extract attributes from.
+ * @param attributesToExtract - An array of attribute names to extract.
+ * @returns An object containing the extracted attributes.
+ */
+export function extractAttributes(
+    response: string,
+    attributesToExtract?: string[]
+): { [key: string]: string | undefined } {
+    const attributes: { [key: string]: string | undefined } = {};
+
+    if (!attributesToExtract || attributesToExtract.length === 0) {
+        // Extract all attributes if no specific attributes are provided
+        const matches = response.matchAll(/"([^"]+)"\s*:\s*"([^"]*)"/g);
+        for (const match of matches) {
+            attributes[match[1]] = match[2];
+        }
+    } else {
+        // Extract only specified attributes
+        attributesToExtract.forEach((attribute) => {
+            const match = response.match(
+                new RegExp(`"${attribute}"\\s*:\\s*"([^"]*)"`, "i")
+            );
+            if (match) {
+                attributes[attribute] = match[1];
+            }
+        });
+    }
+
+    return attributes;
+}
+
+/**
+ * Cleans a JSON-like response string by removing unnecessary markers, line breaks, and extra whitespace.
+ * This is useful for handling improperly formatted JSON responses from external sources.
+ *
+ * @param response - The raw JSON-like string response to clean.
+ * @returns The cleaned string, ready for parsing or further processing.
+ */
+
+export function cleanJsonResponse(response: string): string {
+    return response
+        .replace(/```json\s*/g, "") // Remove ```json
+        .replace(/```\s*/g, "") // Remove any remaining ```
+        .replace(/(\r\n|\n|\r)/g, "") // Remove line breaks
+        .trim();
 }
 
 export const postActionResponseFooter = `Choose any combination of [LIKE], [RETWEET], [QUOTE], and [REPLY] that are appropriate. Each action must be on its own line. Your response must only include the chosen actions.`;
