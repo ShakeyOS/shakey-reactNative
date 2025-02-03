@@ -1279,10 +1279,10 @@ export class MongoDBDatabaseAdapter
                                     embedding: { $ifNull: ["$embedding", []] }
                                 },
                                 in: {
-                                    $cond: {
-                                        if: { $eq: [{ $size: "$$embedding" }, 0] },
-                                        then: 0,
-                                        else: {
+                                    $cond: [
+                                        { $eq: [{ $size: "$$embedding" }, 0] },
+                                        0,
+                                        {
                                             $divide: [
                                                 1,
                                                 { $add: [1, { $function: {
@@ -1292,7 +1292,7 @@ export class MongoDBDatabaseAdapter
                                                         }}] }
                                             ]
                                         }
-                                    }
+                                    ]
                                 }
                             }
                         },
@@ -1325,29 +1325,29 @@ export class MongoDBDatabaseAdapter
         return {
             $multiply: [
                 {
-                    $cond: {
-                        if: searchText ? {
+                    $cond: [
+                        searchText ? {
                             $regexMatch: {
                                 input: { $toLower: "$content.text" },
                                 regex: new RegExp(searchText.toLowerCase())
                             }
                         } : false,
-                        then: 3.0,
-                        else: 1.0
-                    }
+                        3.0,
+                        1.0
+                    ]
                 },
                 {
-                    $cond: {
-                        if: { $eq: ["$content.metadata.isChunk", true] },
-                        then: 1.5,
-                        else: {
-                            $cond: {
-                                if: { $eq: ["$content.metadata.isMain", true] },
-                                then: 1.2,
-                                else: 1.0
-                            }
+                    $cond: [
+                        { $eq: ["$content.metadata.isChunk", true] },
+                        1.5,
+                        {
+                            $cond: [
+                                { $eq: ["$content.metadata.isMain", true] },
+                                1.2,
+                                1.0
+                            ]
                         }
-                    }
+                    ]
                 }
             ]
         };
