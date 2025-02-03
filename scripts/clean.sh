@@ -8,9 +8,6 @@ find . -type d -name "node_modules" -exec rm -rf {} + \
     -o -type d -name "dist" -exec rm -rf {} + \
     -o -type d -name ".turbo" -exec rm -rf {} +
 
-# Remove all package-lock.json files in the client directory
-find ./client -type f -name "package-lock.json" -exec rm -f {} +
-
 # Remove core cache
 rm -rf ./packages/core/cache
 
@@ -18,3 +15,4 @@ rm -rf ./packages/core/cache
 rm ./pnpm-lock.yaml
 
 echo "Cleanup completed."
+exit 0
