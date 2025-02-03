@@ -65,11 +65,11 @@ export class InstagramPostService {
 
             const lastPostTimestamp = lastPost?.timestamp ?? 0;
             const minMinutes = Number.parseInt(
-                this.runtime.getSetting("POST_INTERVAL_MIN") || "90",
+                this.runtime.getSetting("INSTAGRAM_POST_INTERVAL_MIN") || this.runtime.getSetting("POST_INTERVAL_MIN") || "90",
                 10
             );
             const maxMinutes = Number.parseInt(
-                this.runtime.getSetting("POST_INTERVAL_MAX") || "180",
+                this.runtime.getSetting("INSTAGRAM_POST_INTERVAL_MAX") || this.runtime.getSetting("POST_INTERVAL_MAX") || "180",
                 10
             );
             const randomMinutes =
@@ -217,14 +217,24 @@ export class InstagramPostService {
         try {
             elizaLogger.log("Generating image for Instagram post");
 
+            let imageSettings = this.runtime.character.settings.imageSettings || {};
+
             const result = await generateImage(
                 {
                     prompt: content,
-                    width: 1024,
-                    height: 1024,
-                    count: 1,
-                    numIterations: 50,
-                    guidanceScale: 7.5,
+                    width: imageSettings?.width || 1024,
+                    height: imageSettings?.height || 1024,
+                    count: imageSettings?.count || 1,
+negativePrompt: imageSettings?.negativePrompt || null,
+                    numIterations: imageSettings?.numIterations || 50,
+                    guidanceScale: imageSettings?.guidanceScale || 7.5,
+seed: imageSettings?.seed || null,
+                    modelId: imageSettings?.modelId || null,
+                    jobId: imageSettings?.jobId || null,
+                    stylePreset: imageSettings?.stylePreset || "",
+                    hideWatermark: imageSettings?.hideWatermark ?? true,
+                    safeMode: imageSettings?.safeMode ?? true,
+                    cfgScale: imageSettings?.cfgScale || null,
                 },
                 this.runtime
             );
