@@ -46,7 +46,7 @@ const options = {
                     typeof arg === "string" ? arg : JSON.stringify(arg)
                 );
                 const message = messageParts.join(" ");
-                return method.apply(this, [arg1, message]);
+                method.apply(this, [arg1, message]);
             } else {
                 const context = {};
                 const messageParts = [arg1, ...rest].map((arg) =>
@@ -61,7 +61,7 @@ const options = {
 
                 Object.assign(context, ...jsonParts);
 
-                return method.apply(this, [context, message]);
+                method.apply(this, [context, message]);
             }
         },
     },

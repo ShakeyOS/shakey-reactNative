@@ -19,6 +19,8 @@ import {
 import type { ActionOptions, InjectableAction } from "../types";
 import { buildContentOutputTemplate } from "../templates";
 
+// type ActionResult = unknown;
+
 /**
  * Base abstract class for injectable actions
  */
@@ -88,7 +90,7 @@ export abstract class BaseInjectableAction<T> implements InjectableAction<T> {
         message: Memory,
         state?: State,
         callback?: HandlerCallback
-    ): Promise<any | null>;
+    ): Promise<unknown | null>;
 
     // -------- Implemented methods for Eliza runtime --------
 
@@ -124,14 +126,15 @@ export abstract class BaseInjectableAction<T> implements InjectableAction<T> {
         state?: State
     ): Promise<string> {
         // Initialize or update state
-        if (!state) {
-            state = (await runtime.composeState(message)) as State;
+        let currentState = state;
+        if (!currentState) {
+            currentState = (await runtime.composeState(message)) as State;
         } else {
-            state = await runtime.updateRecentMessageState(state);
+            currentState = await runtime.updateRecentMessageState(currentState);
         }
 
         // Compose context
-        return composeContext({ state, template: this.template });
+        return composeContext({ state: currentState, template: this.template });
     }
 
     /**
@@ -164,7 +167,7 @@ export abstract class BaseInjectableAction<T> implements InjectableAction<T> {
             runtime,
             context: actionContext,
             modelClass: ModelClass.SMALL,
-            schema: this.contentSchema as z.ZodSchema<any>,
+            schema: this.contentSchema,
         });
 
         elizaLogger.debug("Response: ", resourceDetails.object);
@@ -179,9 +182,8 @@ export abstract class BaseInjectableAction<T> implements InjectableAction<T> {
                 JSON.stringify(parsedObj.error?.flatten())
             );
             return null;
-        } else {
-            return parsedObj.data;
         }
+        return parsedObj.data;
     }
 
     /**
@@ -200,7 +202,7 @@ export abstract class BaseInjectableAction<T> implements InjectableAction<T> {
         state?: State,
         _options?: Record<string, unknown>,
         callback?: HandlerCallback
-    ): Promise<any | null> {
+    ): Promise<unknown | null> {
         let content: T;
         try {
             content = await this.processMessages(runtime, message, state);
@@ -209,9 +211,7 @@ export abstract class BaseInjectableAction<T> implements InjectableAction<T> {
 
             if (callback) {
                 await callback?.({
-                    text:
-                        "Unable to process transfer request. Invalid content: " +
-                        err.message,
+                    text: `Unable to process transfer request. Invalid content: ${err.message}`,
                     content: {
                         error: "Invalid content",
                     },

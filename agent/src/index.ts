@@ -41,11 +41,11 @@ import { SupabaseDatabaseAdapter } from "@elizaos/adapter-supabase";
 import { MongoDBDatabaseAdapter } from "@elizaos/adapter-mongodb";
 import { RedisClient } from "@elizaos/adapter-redis";
 import { normalizeCharacter } from "@elizaos/plugin-di";
-
+import { MongoClient } from "mongodb";
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
 
-export const wait = (minTime: number = 1000, maxTime: number = 3000) => {
+export const wait = (minTime = 1000, maxTime = 3000) => {
     const waitTime =
         Math.floor(Math.random() * (maxTime - minTime + 1)) + minTime;
     return new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -120,89 +120,12 @@ function mergeCharacters(base: Character, child: Character): Character {
     return mergeObjects(base, child);
 }
 
-
-async function loadCharacterTryPath(characterPath: string): Promise<Character> {
-    let content: string | null = null;
-    let resolvedPath = "";
-
-    // Try different path resolutions in order
-    const pathsToTry = [
-        characterPath, // exact path as specified
-        path.resolve(process.cwd(), characterPath), // relative to cwd
-        path.resolve(process.cwd(), "agent", characterPath), // Add this
-        path.resolve(__dirname, characterPath), // relative to current script
-        path.resolve(__dirname, "characters", path.basename(characterPath)), // relative to agent/characters
-        path.resolve(__dirname, "../characters", path.basename(characterPath)), // relative to characters dir from agent
-        path.resolve(
-            __dirname,
-            "../../characters",
-            path.basename(characterPath)
-        ), // relative to project root characters dir
-    ];
-
-    elizaLogger.info(
-        "Trying paths:",
-        pathsToTry.map((p) => ({
-            path: p,
-            exists: fs.existsSync(p),
-        }))
-    );
-
-    for (const tryPath of pathsToTry) {
-        content = tryLoadFile(tryPath);
-        if (content !== null) {
-            resolvedPath = tryPath;
-            break;
-        }
-    }
-
-    if (content === null) {
-        elizaLogger.error(
-            `Error loading character from ${characterPath}: File not found in any of the expected locations`
-        );
-        elizaLogger.error("Tried the following paths:");
-        pathsToTry.forEach((p) => elizaLogger.error(` - ${p}`));
-        throw new Error(
-            `Error loading character from ${characterPath}: File not found in any of the expected locations`
-        );
-    }
-    try {
-        const character: Character = await loadCharacter(resolvedPath);
-        elizaLogger.info(`Successfully loaded character from: ${resolvedPath}`);
-        return character;
-    } catch (e) {
-        elizaLogger.error(`Error parsing character from ${resolvedPath}: ${e}`);
-        throw new Error(`Error parsing character from ${resolvedPath}: ${e}`);
-    }
-}
-
-function commaSeparatedStringToArray(commaSeparated: string): string[] {
-    return commaSeparated?.split(",").map((value) => value.trim());
-}
-
-async function readCharactersFromStorage(
-    characterPaths: string[]
-): Promise<string[]> {
-    try {
-        const uploadDir = path.join(process.cwd(), "data", "characters");
-        await fs.promises.mkdir(uploadDir, { recursive: true });
-        const fileNames = await fs.promises.readdir(uploadDir);
-        fileNames.forEach((fileName) => {
-            characterPaths.push(path.join(uploadDir, fileName));
-        });
-    } catch (err) {
-        elizaLogger.error(`Error reading directory: ${err.message}`);
-    }
-
-    return characterPaths;
-}
-
 function isAllStrings(arr: unknown[]): boolean {
     return Array.isArray(arr) && arr.every((item) => typeof item === "string");
 }
 
 export async function loadCharacterFromOnchain(): Promise<Character[]> {
-    const jsonText = "onchainJson";
+    const jsonText = null;
 
     console.log("JSON:", jsonText);
     if (!jsonText) return [];
@@ -331,6 +254,84 @@ async function loadCharacter(filePath: string): Promise<Character> {
     return jsonToCharacter(filePath, character);
 }
 
+
+async function loadCharacterTryPath(characterPath: string): Promise<Character> {
+    let content: string | null = null;
+    let resolvedPath = "";
+
+    // Try different path resolutions in order
+    const pathsToTry = [
+        characterPath, // exact path as specified
+        path.resolve(process.cwd(), characterPath), // relative to cwd
+        path.resolve(process.cwd(), "agent", characterPath), // Add this
+        path.resolve(__dirname, characterPath), // relative to current script
+        path.resolve(__dirname, "characters", path.basename(characterPath)), // relative to agent/characters
+        path.resolve(__dirname, "../characters", path.basename(characterPath)), // relative to characters dir from agent
+        path.resolve(
+            __dirname,
+            "../../characters",
+            path.basename(characterPath)
+        ), // relative to project root characters dir
+    ];
+
+    elizaLogger.info(
+        "Trying paths:",
+        pathsToTry.map((p) => ({
+            path: p,
+            exists: fs.existsSync(p),
+        }))
+    );
+
+    for (const tryPath of pathsToTry) {
+        content = tryLoadFile(tryPath);
+        if (content !== null) {
+            resolvedPath = tryPath;
+            break;
+        }
+    }
+
+    if (content === null) {
+        elizaLogger.error(
+            `Error loading character from ${characterPath}: File not found in any of the expected locations`
+        );
+        elizaLogger.error("Tried the following paths:");
+        pathsToTry.forEach((p) => elizaLogger.error(` - ${p}`));
+        throw new Error(
+            `Error loading character from ${characterPath}: File not found in any of the expected locations`
+        );
+    }
+    try {
+        const character: Character = await loadCharacter(resolvedPath);
+        elizaLogger.info(`Successfully loaded character from: ${resolvedPath}`);
+        return character;
+    } catch (e) {
+        elizaLogger.error(`Error parsing character from ${resolvedPath}: ${e}`);
+        throw new Error(`Error parsing character from ${resolvedPath}: ${e}`);
+    }
+}
+
+function commaSeparatedStringToArray(commaSeparated: string): string[] {
+    return commaSeparated?.split(",").map((value) => value.trim());
+}
+
+async function readCharactersFromStorage(
+    characterPaths: string[]
+): Promise<string[]> {
+    try {
+        const uploadDir = path.join(process.cwd(), "data", "characters");
+        await fs.promises.mkdir(uploadDir, { recursive: true });
+        const fileNames = await fs.promises.readdir(uploadDir);
+        fileNames.forEach((fileName) => {
+            characterPaths.push(path.join(uploadDir, fileName));
+        });
+    } catch (err) {
+        elizaLogger.error(`Error reading directory: ${err.message}`);
+    }
+
+    return characterPaths;
+}
+
+
 export async function loadCharacters(
     charactersArg: string
 ): Promise<Character[]> {
@@ -409,16 +410,12 @@ export function getTokenForProvider(
     character: Character
 ): string | undefined {
     switch (provider) {
-        // no key needed for llama_local, ollama, lmstudio, gaianet or bedrock
+        // no key needed for llama_local or gaianet
         case ModelProviderName.LLAMALOCAL:
             return "";
         case ModelProviderName.OLLAMA:
             return "";
-        case ModelProviderName.LMSTUDIO:
-            return "";
         case ModelProviderName.GAIANET:
-            return "";
-        case ModelProviderName.BEDROCK:
             return "";
         case ModelProviderName.OPENAI:
             return (
@@ -460,7 +457,7 @@ export function getTokenForProvider(
             );
         case ModelProviderName.OPENROUTER:
             return (
-                character.settings?.secrets?.OPENROUTER_API_KEY ||
+                character.settings?.secrets?.OPENROUTER ||
                 settings.OPENROUTER_API_KEY
             );
         case ModelProviderName.GROK:
@@ -507,21 +504,10 @@ export function getTokenForProvider(
                 character.settings?.secrets?.HYPERBOLIC_API_KEY ||
                 settings.HYPERBOLIC_API_KEY
             );
-
         case ModelProviderName.VENICE:
             return (
                 character.settings?.secrets?.VENICE_API_KEY ||
                 settings.VENICE_API_KEY
-            );
-        case ModelProviderName.ATOMA:
-            return (
-                character.settings?.secrets?.ATOMASDK_BEARER_AUTH ||
-                settings.ATOMASDK_BEARER_AUTH
-            );
-        case ModelProviderName.NVIDIA:
-            return (
-                character.settings?.secrets?.NVIDIA_API_KEY ||
-                settings.NVIDIA_API_KEY
             );
         case ModelProviderName.AKASH_CHAT_API:
             return (
@@ -552,11 +538,6 @@ export function getTokenForProvider(
             return (
                 character.settings?.secrets?.DEEPSEEK_API_KEY ||
                 settings.DEEPSEEK_API_KEY
-            );
-        case ModelProviderName.LIVEPEER:
-            return (
-                character.settings?.secrets?.LIVEPEER_GATEWAY_URL ||
-                settings.LIVEPEER_GATEWAY_URL
             );
         default:
             const errorMessage = `Failed to get token - unsupported model provider: ${provider}`;
@@ -794,19 +775,25 @@ export async function createAgent(
         throw new Error("Invalid TEE configuration");
     }
 
-    let goatPlugin: any | undefined;
-    if (getSecret(character, "EVM_PRIVATE_KEY")) {
-        goatPlugin = await createGoatPlugin((secret) =>
-            getSecret(character, secret)
-        );
-    }
+    // let goatPlugin: any | undefined;
+    // if (getSecret(character, "EVM_PRIVATE_KEY")) {
+    //     goatPlugin = await createGoatPlugin((secret) =>
+    //         getSecret(character, secret)
+    //     );
+    // }
 
-    let zilliqaPlugin: any | undefined;
-    if (getSecret(character, "ZILLIQA_PRIVATE_KEY")) {
-        zilliqaPlugin = await createZilliqaPlugin((secret) =>
-            getSecret(character, secret)
-        );
-    }
+    // let zilliqaPlugin: any | undefined;
+    // if (getSecret(character, "ZILLIQA_PRIVATE_KEY")) {
+    //     zilliqaPlugin = await createZilliqaPlugin((secret) =>
+    //         getSecret(character, secret)
+    //     );
+    // }
+
+    // if (getSecret(character, "EVM_PRIVATE_KEY")) {
+    //     goatPlugin = await createGoatPlugin((secret) =>
+    //         getSecret(character, secret)
+    //     );
+    // }
 
     // Initialize Reclaim adapter if environment variables are present
     // let verifiableInferenceAdapter;
@@ -825,41 +812,41 @@ export async function createAgent(
     // }
     // Initialize Opacity adapter if environment variables are present
 
-    let verifiableInferenceAdapter;
-    if (
-        process.env.OPACITY_TEAM_ID &&
-        process.env.OPACITY_CLOUDFLARE_NAME &&
-        process.env.OPACITY_PROVER_URL &&
-        process.env.VERIFIABLE_INFERENCE_ENABLED === "true"
-    ) {
-        verifiableInferenceAdapter = new OpacityAdapter({
-            teamId: process.env.OPACITY_TEAM_ID,
-            teamName: process.env.OPACITY_CLOUDFLARE_NAME,
-            opacityProverUrl: process.env.OPACITY_PROVER_URL,
-            modelProvider: character.modelProvider,
-            token: token,
-        });
-        elizaLogger.log("Verifiable inference adapter initialized");
-        elizaLogger.log("teamId", process.env.OPACITY_TEAM_ID);
-        elizaLogger.log("teamName", process.env.OPACITY_CLOUDFLARE_NAME);
-        elizaLogger.log("opacityProverUrl", process.env.OPACITY_PROVER_URL);
-        elizaLogger.log("modelProvider", character.modelProvider);
-        elizaLogger.log("token", token);
-    }
-    if (
-        process.env.PRIMUS_APP_ID &&
-        process.env.PRIMUS_APP_SECRET &&
-        process.env.VERIFIABLE_INFERENCE_ENABLED === "true"
-    ) {
-        verifiableInferenceAdapter = new PrimusAdapter({
-            appId: process.env.PRIMUS_APP_ID,
-            appSecret: process.env.PRIMUS_APP_SECRET,
-            attMode: "proxytls",
-            modelProvider: character.modelProvider,
-            token,
-        });
-        elizaLogger.log("Verifiable inference primus adapter initialized");
-    }
+    // let verifiableInferenceAdapter;
+    // if (
+    //     process.env.OPACITY_TEAM_ID &&
+    //     process.env.OPACITY_CLOUDFLARE_NAME &&
+    //     process.env.OPACITY_PROVER_URL &&
+    //     process.env.VERIFIABLE_INFERENCE_ENABLED === "true"
+    // ) {
+    //     verifiableInferenceAdapter = new OpacityAdapter({
+    //         teamId: process.env.OPACITY_TEAM_ID,
+    //         teamName: process.env.OPACITY_CLOUDFLARE_NAME,
+    //         opacityProverUrl: process.env.OPACITY_PROVER_URL,
+    //         modelProvider: character.modelProvider,
+    //         token: token,
+    //     });
+    //     elizaLogger.log("Verifiable inference adapter initialized");
+    //     elizaLogger.log("teamId", process.env.OPACITY_TEAM_ID);
+    //     elizaLogger.log("teamName", process.env.OPACITY_CLOUDFLARE_NAME);
+    //     elizaLogger.log("opacityProverUrl", process.env.OPACITY_PROVER_URL);
+    //     elizaLogger.log("modelProvider", character.modelProvider);
+    //     elizaLogger.log("token", token);
+    // }
+    // if (
+    //     process.env.PRIMUS_APP_ID &&
+    //     process.env.PRIMUS_APP_SECRET &&
+    //     process.env.VERIFIABLE_INFERENCE_ENABLED === "true"
+    // ) {
+    //     verifiableInferenceAdapter = new PrimusAdapter({
+    //         appId: process.env.PRIMUS_APP_ID,
+    //         appSecret: process.env.PRIMUS_APP_SECRET,
+    //         attMode: "proxytls",
+    //         modelProvider: character.modelProvider,
+    //         token,
+    //     });
+    //     elizaLogger.log("Verifiable inference primus adapter initialized");
+    // }
 
     return new AgentRuntime({
         databaseAdapter: db,
@@ -1049,83 +1036,66 @@ const hasValidRemoteUrls = () =>
     process.env.REMOTE_CHARACTER_URLS.startsWith("http");
 
 
-const startAgents = async () => {
-    const directClient = new DirectClient();
-    let serverPort = Number.parseInt(settings.SERVER_PORT || "3000");
-    const args = parseArguments();
-    const charactersArg = args.characters || args.character;
-    let characters = [defaultCharacter];
+    const startAgents = async () => {
+        const directClient = new DirectClient();
+        let serverPort = Number.parseInt(settings.SERVER_PORT || "3000");
+        const args = parseArguments();
+        const charactersArg = args.characters || args.character;
+        let characters = [defaultCharacter];
 
-    if (process.env.IQ_WALLET_ADDRESS && process.env.IQSOlRPC) {
-        characters = await loadCharacterFromOnchain();
-    }
-
-    // const notOnchainJson = !onchainJson || onchainJson == "null";
-
-    // if ((notOnchainJson && charactersArg) || hasValidRemoteUrls()) {
-    //     characters = await loadCharacters(charactersArg);
-    // }
-
-    // Normalize characters for injectable plugins
-    characters = await Promise.all(characters.map(normalizeCharacter));
-
-    try {
-        for (const character of characters) {
-            await startAgent(character, directClient);
+        if (process.env.IQ_WALLET_ADDRESS && process.env.IQSOlRPC) {
+            characters = await loadCharacterFromOnchain();
         }
-    } catch (error) {
-        elizaLogger.error("Error starting agents:", error);
-    }
 
-    // Find available port
-    while (!(await checkPortAvailable(serverPort))) {
-        elizaLogger.warn(
-            `Port ${serverPort} is in use, trying ${serverPort + 1}`
+        // const notOnchainJson = !onchainJson || onchainJson == "null";
+
+        if (charactersArg || hasValidRemoteUrls()) {
+            characters = await loadCharacters(charactersArg);
+        }
+
+        // Normalize characters for injectable plugins
+        characters = await Promise.all(characters.map(normalizeCharacter));
+
+        try {
+            for (const character of characters) {
+                await startAgent(character, directClient);
+            }
+        } catch (error) {
+            elizaLogger.error("Error starting agents:", error);
+        }
+
+        // Find available port
+        while (!(await checkPortAvailable(serverPort))) {
+            elizaLogger.warn(
+                `Port ${serverPort} is in use, trying ${serverPort + 1}`
+            );
+            serverPort++;
+        }
+
+        // upload some agent functionality into directClient
+        directClient.startAgent = async (character) => {
+            // Handle plugins
+            character.plugins = await handlePluginImporting(character.plugins);
+
+            // wrap it so we don't have to inject directClient later
+            return startAgent(character, directClient);
+        };
+
+        directClient.loadCharacterTryPath = loadCharacterTryPath;
+        directClient.jsonToCharacter = jsonToCharacter;
+
+        directClient.start(serverPort);
+
+        if (serverPort !== Number.parseInt(settings.SERVER_PORT || "3000")) {
+            elizaLogger.log(`Server started on alternate port ${serverPort}`);
+        }
+
+        elizaLogger.log(
+            "Run `pnpm start:client` to start the client and visit the outputted URL (http://localhost:5173) to chat with your agents. When running multiple agents, use client with different port `SERVER_PORT=3001 pnpm start:client`"
         );
-        serverPort++;
-    }
-
-    // upload some agent functionality into directClient
-    directClient.startAgent = async (character) => {
-        // Handle plugins
-        character.plugins = await handlePluginImporting(character.plugins);
-
-        // wrap it so we don't have to inject directClient later
-        return startAgent(character, directClient);
     };
-
-    directClient.loadCharacterTryPath = loadCharacterTryPath;
-    directClient.jsonToCharacter = jsonToCharacter;
-
-    directClient.start(serverPort);
-
-    if (serverPort !== Number.parseInt(settings.SERVER_PORT || "3000")) {
-        elizaLogger.log(`Server started on alternate port ${serverPort}`);
-    }
-
-    elizaLogger.log(
-        "Run `pnpm start:client` to start the client and visit the outputted URL (http://localhost:5173) to chat with your agents. When running multiple agents, use client with different port `SERVER_PORT=3001 pnpm start:client`"
-    );
-};
 
 startAgents().catch((error) => {
     elizaLogger.error("Unhandled error in startAgents:", error);
     process.exit(1);
 });
-
-
-// Prevent unhandled exceptions from crashing the process if desired
-if (
-    process.env.PREVENT_UNHANDLED_EXIT &&
-    parseBooleanFromText(process.env.PREVENT_UNHANDLED_EXIT)
-) {
-    // Handle uncaught exceptions to prevent the process from crashing
-    process.on("uncaughtException", function (err) {
-        console.error("uncaughtException", err);
-    });
-
-    // Handle unhandled rejections to prevent the process from crashing
-    process.on("unhandledRejection", function (err) {
-        console.error("unhandledRejection", err);
-    });
-}

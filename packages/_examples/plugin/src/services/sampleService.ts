@@ -23,7 +23,7 @@ export class SampleService extends Service {
     private readonly DEFAULT_INTERVAL = 15 * 60 * 1000; // 15 minutes in milliseconds
 
     static get serviceType(): ServiceType {
-        return ServiceType.SAMPLE;
+        return "sample" as ServiceType.SAMPLE;
     }
 
     private static isInitialized = false;

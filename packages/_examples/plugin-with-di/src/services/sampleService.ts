@@ -34,7 +34,7 @@ export class SampleService extends Service {
     }
 
     static get serviceType(): ServiceType {
-        return ServiceType.SAMPLE;
+        return "sample" as ServiceType.SAMPLE;
     }
 
     private static isInitialized = false;
