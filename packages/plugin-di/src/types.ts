@@ -53,7 +53,7 @@ export interface InjectableAction<T> extends Action {
         message: Memory,
         state?: State,
         callback?: HandlerCallback
-    ): Promise<any | null>;
+    ): Promise<unknown | null>;
 }
 
 /**
