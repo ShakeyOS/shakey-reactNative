@@ -274,6 +274,7 @@ export async function sendTweet(
         agentId: client.runtime.agentId,
         userId: client.runtime.agentId,
         content: {
+            tweetId: tweet.id,
             text: tweet.text,
             source: "twitter",
             url: tweet.permanentUrl,
